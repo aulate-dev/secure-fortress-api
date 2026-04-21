@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+out/
+build/
+*.tsbuildinfo
+
+# Environment files (critical security)
+.env
+.env.local
+.env.production
+.env.development
+.env.test
+.env.*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE/editor settings
+.vscode/
+.idea/
+
+# Docker temporary/runtime files
+.docker/
+docker-data/
+*.pid
+*.seed
+
+# Local databases
+*.sqlite
+*.sqlite3
+*.db
+
+# Coverage and temporary files
+coverage/
+.nyc_output/
+tmp/
+temp/
