@@ -1,0 +1,48 @@
+{
+  "name": "secure-fortress-api",
+  "version": "1.0.0",
+  "description": "Security-first RESTful API for enterprise inventory management. Implements RBAC, adaptive Argon2id hashing, and a full audit log system. Engineered to mitigate OWASP Top 10 risks, featuring SQLi protection, Rate Limiting, and secure JWT handling via HttpOnly cookies. Built for high-stakes defensive environments.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "docker:up": "docker compose up --build",
+    "migrate:make": "knex --knexfile knexfile.ts --esm migrate:make",
+    "migrate:latest": "knex --knexfile knexfile.ts --esm migrate:latest",
+    "migrate:rollback": "knex --knexfile knexfile.ts --esm migrate:rollback",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aulate-dev/secure-fortress-api.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/aulate-dev/secure-fortress-api/issues"
+  },
+  "homepage": "https://github.com/aulate-dev/secure-fortress-api#readme",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.3.2",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "knex": "^3.2.9",
+    "pg": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^25.6.0",
+    "@types/pg": "^8.20.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^6.0.3"
+  }
+}

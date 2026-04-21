@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:15
+    container_name: secure-fortress-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: secure_fortress
+      POSTGRES_USER: secure_fortress_user
+      POSTGRES_PASSWORD: secure_fortress_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U secure_fortress_user -d secure_fortress"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: secure-fortress-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 3000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: secure_fortress_user
+      DB_PASSWORD: secure_fortress_password
+      DB_NAME: secure_fortress
+      JWT_SECRET: change_this_super_secret_key
+      ALLOWED_ORIGINS: http://localhost:3000
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
