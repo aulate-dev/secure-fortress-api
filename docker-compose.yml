@@ -1,6 +1,6 @@
-version: '3.8'
 
 services:
+  # Tu Base de Datos
   db:
     image: postgres:15
     container_name: secure-fortress-db
@@ -9,24 +9,22 @@ services:
       POSTGRES_DB: secure_fortress
       POSTGRES_USER: secure_fortress_user
       POSTGRES_PASSWORD: secure_fortress_password
-      # El "trust" debe ir aquí, en la base de datos
       POSTGRES_HOST_AUTH_METHOD: trust 
     ports:
-      - "5433:5432" # Windows conecta por 5433 para evitar el "Postgres fantasma"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    # El comando de listen_addresses también pertenece a la base de datos
     command: ["postgres", "-c", "listen_addresses=*"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U secure_fortress_user -d secure_fortress"]
       interval: 5s
       timeout: 5s
       retries: 10
-      start_period: 5s
 
+  # Tu Backend (API)
   api:
     build:
-      context: .
+      context: . # Porque el compose está aquí
       dockerfile: Dockerfile
     container_name: secure-fortress-api
     restart: unless-stopped
@@ -35,18 +33,27 @@ services:
         condition: service_healthy
     environment:
       PORT: 3000
-      # Comunicación INTERNA de Docker: la API usa el nombre del servicio "db" y puerto 5432
       DB_HOST: db
       DB_PORT: 5432
       DB_USER: secure_fortress_user
       DB_PASSWORD: secure_fortress_password
       DB_NAME: secure_fortress
       JWT_SECRET: 43e159e0e60cabd57c2fb47dad3e000ee548e759266cef7d05d3281c0d0c7828
-      ALLOWED_ORIGINS: http://localhost:5173
+      ALLOWED_ORIGINS: http://localhost:5173   
     ports:
       - "3000:3000"
-    # IMPORTANTE: Aquí NO va el comando de postgres. 
-    # Docker usará el CMD que definiste en tu Dockerfile (normalmente npm run dev o node src/index.js)
+
+  # Tu Frontend (Web)
+  secure-fortress-web:
+    build:
+      context: ../secure-fortress-web # Sube un nivel y entra a la carpeta de front
+      dockerfile: Dockerfile
+    container_name: secure-fortress-web
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      - NODE_ENV=development
 
 volumes:
   postgres_data:
