@@ -129,6 +129,11 @@ export const getProductById = async (req: AuthenticatedRequest, res: Response): 
 
 export const createProduct = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    if (req.user?.role === "Registrador") {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
     const productPayload = req.body as Omit<ProductRecord, "id">;
     const [createdProduct] = await database<ProductRecord>("products")
       .insert(productPayload)
@@ -162,10 +167,95 @@ export const updateProduct = async (req: AuthenticatedRequest, res: Response): P
       return;
     }
 
+    const currentProduct = await database<ProductRecord>("products").where({ id: productId }).first();
+    if (!currentProduct) {
+      res.status(404).json({ error: "Product not found" });
+      return;
+    }
+
     const body = req.body as Record<string, unknown>;
-    const productPayload = buildProductPatchByRole(body, userRole);
+    const normalizedBody: Record<string, unknown> = { ...body };
+    if (userRole === "Registrador") {
+      if (body.cantidad === undefined) {
+        res.status(403).json({
+          error: "El registrador solo puede registrar salidas mediante el campo cantidad",
+        });
+        return;
+      }
+
+      const requestedCantidad = parseNonNegativeNumber(body.cantidad);
+      if (requestedCantidad === null) {
+        res.status(400).json({ error: "Invalid product payload" });
+        return;
+      }
+
+      if (requestedCantidad > currentProduct.cantidad) {
+        res.status(403).json({
+          error: "El registrador no tiene permisos para aumentar el stock, solo para reportar salidas",
+        });
+        return;
+      }
+
+      if (body.precio !== undefined) {
+        const requestedPrecio = parseNonNegativeNumber(body.precio);
+        if (requestedPrecio === null) {
+          res.status(400).json({ error: "Invalid product payload" });
+          return;
+        }
+
+        if (requestedPrecio !== currentProduct.precio) {
+          res.status(403).json({
+            error: "El registrador no puede modificar el precio o datos maestros del producto",
+          });
+          return;
+        }
+
+        delete normalizedBody.precio;
+      }
+
+      const sameAsCurrentNombre =
+        body.nombre !== undefined &&
+        normalizeStringField(body.nombre) !== null &&
+        normalizeStringField(body.nombre) === currentProduct.nombre;
+      const requestedCode = body.codigo ?? body.sku_alfanumerico;
+      const sameAsCurrentCode =
+        requestedCode !== undefined &&
+        normalizeStringField(requestedCode) !== null &&
+        normalizeStringField(requestedCode) === currentProduct.sku_alfanumerico;
+      const sameAsCurrentDescripcion =
+        body.descripcion !== undefined &&
+        normalizeStringField(body.descripcion) !== null &&
+        normalizeStringField(body.descripcion) === currentProduct.descripcion;
+
+      const attemptedMasterDataChange =
+        (body.nombre !== undefined && !sameAsCurrentNombre) ||
+        (requestedCode !== undefined && !sameAsCurrentCode) ||
+        (body.descripcion !== undefined && !sameAsCurrentDescripcion);
+
+      if (attemptedMasterDataChange) {
+        res.status(403).json({
+          error: "El registrador no puede modificar el precio o datos maestros del producto",
+        });
+        return;
+      }
+
+      if (body.nombre !== undefined) {
+        delete normalizedBody.nombre;
+      }
+      if (body.codigo !== undefined) {
+        delete normalizedBody.codigo;
+      }
+      if (body.sku_alfanumerico !== undefined) {
+        delete normalizedBody.sku_alfanumerico;
+      }
+      if (body.descripcion !== undefined) {
+        delete normalizedBody.descripcion;
+      }
+    }
+
+    const productPayload = buildProductPatchByRole(normalizedBody, userRole);
     if (productPayload === "forbidden") {
-      res.status(403).json({ error: "Forbidden" });
+      res.status(403).json({ error: "El rol actual no tiene permisos para modificar productos" });
       return;
     }
 

@@ -40,6 +40,7 @@ interface LoginResult {
     username: string;
     email: string;
     role: UserRole;
+    last_ip: string | null;
   };
 }
 
@@ -103,7 +104,7 @@ export class AuthService {
     if (!isPasswordValid) {
       await logEvent({
         event_type: "LOGIN_FAILED",
-        user_id: user.id,
+        user_id: null,
         details: "Invalid password",
         req,
       });
@@ -148,6 +149,7 @@ export class AuthService {
         username: user.username,
         email: user.email,
         role: user.role,
+        last_ip: currentIp,
       },
     };
   }

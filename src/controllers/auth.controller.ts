@@ -6,7 +6,7 @@ import {
   registerFailedLoginAttempt,
 } from "../middlewares/login-rate-limit.middleware";
 import { type AuthenticatedRequest } from "../middlewares/auth.middleware";
-import { logEvent } from "../services/audit.service";
+import { getRequestIp, logEvent } from "../services/audit.service";
 import { invalidateSession, registerSession } from "../services/session.service";
 import { clearAuthCookie } from "../utils/auth-cookie.util";
 import { requireEmail, requireNonEmptyString, requirePassword } from "../utils/validation.util";
@@ -53,6 +53,12 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     // Regenerates the server-side session identifier at each login.
     registerSession(loginResult.user.id, loginResult.sessionId);
     clearFailedLoginAttempts(req);
+    await logEvent({
+      event_type: "LOGIN_SUCCESS",
+      user_id: loginResult.user.id,
+      details: "User authenticated successfully",
+      req,
+    });
 
     res.cookie("auth_token", loginResult.token, {
       httpOnly: true,
@@ -63,6 +69,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     res.status(200).json({
       user: loginResult.user,
+      ipAddress: getRequestIp(req),
       message: "Login successful",
     });
   } catch (error) {
@@ -90,4 +97,19 @@ export const logout = async (req: AuthenticatedRequest, res: Response): Promise<
     const message = error instanceof Error ? error.message : "Logout failed";
     res.status(500).json({ error: message });
   }
+};
+
+export const sessionContext = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  if (!req.user?.sub) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
+  res.status(200).json({
+    id: Number(req.user.sub),
+    email: req.user.email ?? "",
+    username: req.user.username ?? "Usuario",
+    sourceIp: getRequestIp(req),
+    role: req.user.role,
+  });
 };

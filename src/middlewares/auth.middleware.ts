@@ -102,6 +102,7 @@ export const authorizeRole = (roles: UserRole[]) => {
 };
 
 export const checkRole = authorizeRole;
+export const authMiddleware = authenticate;
 
 export const getCookieValueByName = getCookieValue;
 
