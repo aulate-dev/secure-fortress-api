@@ -7,16 +7,21 @@ import {
   listProducts,
   updateProduct,
 } from "../controllers/product.controller";
-import { authenticate, checkRole } from "../middlewares/auth.middleware";
+import { authenticate, authorizeRole } from "../middlewares/auth.middleware";
+import { validateProductPayload } from "../middlewares/product-validation.middleware";
 import { enforceSessionTimeout } from "../middlewares/session-timeout.middleware";
 
 const productRouter = Router();
 
 productRouter.use(authenticate, enforceSessionTimeout);
-productRouter.get("/", checkRole(["SuperAdmin", "Registrador", "Auditor"]), listProducts);
-productRouter.get("/:id", checkRole(["SuperAdmin", "Registrador", "Auditor"]), getProductById);
-productRouter.post("/", checkRole(["SuperAdmin", "Registrador"]), createProduct);
-productRouter.put("/:id", checkRole(["SuperAdmin", "Registrador"]), updateProduct);
-productRouter.delete("/:id", checkRole(["SuperAdmin", "Registrador"]), deleteProduct);
+productRouter.get("/", authorizeRole(["SuperAdmin", "Registrador", "Auditor"]), listProducts);
+productRouter.get("/:id", authorizeRole(["SuperAdmin", "Registrador", "Auditor"]), getProductById);
+productRouter.post("/", authorizeRole(["SuperAdmin", "Registrador"]), validateProductPayload, createProduct);
+productRouter.put(
+  "/:id",
+  authorizeRole(["SuperAdmin", "Registrador", "Auditor"]),
+  updateProduct,
+);
+productRouter.delete("/:id", authorizeRole(["SuperAdmin", "Registrador"]), deleteProduct);
 
 export { productRouter };

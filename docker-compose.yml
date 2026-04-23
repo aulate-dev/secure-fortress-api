@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   db:
     image: postgres:15
@@ -7,10 +9,14 @@ services:
       POSTGRES_DB: secure_fortress
       POSTGRES_USER: secure_fortress_user
       POSTGRES_PASSWORD: secure_fortress_password
+      # El "trust" debe ir aquí, en la base de datos
+      POSTGRES_HOST_AUTH_METHOD: trust 
     ports:
-      - "5432:5432"
+      - "5433:5432" # Windows conecta por 5433 para evitar el "Postgres fantasma"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    # El comando de listen_addresses también pertenece a la base de datos
+    command: ["postgres", "-c", "listen_addresses=*"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U secure_fortress_user -d secure_fortress"]
       interval: 5s
@@ -29,15 +35,18 @@ services:
         condition: service_healthy
     environment:
       PORT: 3000
+      # Comunicación INTERNA de Docker: la API usa el nombre del servicio "db" y puerto 5432
       DB_HOST: db
       DB_PORT: 5432
       DB_USER: secure_fortress_user
       DB_PASSWORD: secure_fortress_password
       DB_NAME: secure_fortress
-      JWT_SECRET: change_this_super_secret_key
-      ALLOWED_ORIGINS: http://localhost:3000
+      JWT_SECRET: 43e159e0e60cabd57c2fb47dad3e000ee548e759266cef7d05d3281c0d0c7828
+      ALLOWED_ORIGINS: http://localhost:5173
     ports:
       - "3000:3000"
+    # IMPORTANTE: Aquí NO va el comando de postgres. 
+    # Docker usará el CMD que definiste en tu Dockerfile (normalmente npm run dev o node src/index.js)
 
 volumes:
   postgres_data:

@@ -7,6 +7,7 @@ import { validateCsrfSource } from "./middlewares/csrf.middleware";
 import { adminRouter } from "./routes/admin.routes";
 import { authRouter } from "./routes/auth.routes";
 import { productRouter } from "./routes/product.routes";
+import { auditRouter, usersRouter } from "./routes/rbac.routes";
 
 const app = express();
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",").map((origin) => origin.trim()) ?? [];
@@ -40,6 +41,8 @@ app.get("/health", async (_request: Request, response: Response, next: NextFunct
 app.use("/api/auth", authRouter);
 app.use("/api/products", productRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/users", usersRouter);
+app.use("/api/audit", auditRouter);
 
 app.use((_request: Request, response: Response) => {
   response.status(404).json({ error: "Route not found" });

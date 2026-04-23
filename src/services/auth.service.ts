@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import jwt from "jsonwebtoken";
 
 import { database } from "../config/database";
+import { getJwtSecret } from "../config/security";
 import { comparePassword, hashPassword } from "../utils/hash.util";
 import { getRequestIp, logEvent } from "./audit.service";
 
@@ -109,10 +110,7 @@ export class AuthService {
       throw buildInvalidCredentialsError();
     }
 
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) {
-      throw new Error("Missing required environment variable: JWT_SECRET");
-    }
+    const jwtSecret = getJwtSecret();
 
     const sessionId = randomUUID();
     const currentIp = getRequestIp(req);
@@ -132,7 +130,7 @@ export class AuthService {
         sid: sessionId,
       },
       jwtSecret,
-      { expiresIn: "2h" },
+      { expiresIn: "1h" },
     );
 
     await logEvent({

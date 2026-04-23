@@ -54,7 +54,8 @@ Detailed endpoint reference: see `README_API.md`.
 - `src/middlewares/login-rate-limit.middleware.ts` - login anti-bruteforce
 - `src/middlewares/csrf.middleware.ts` - CSRF header validation
 - `src/database/migrations` - schema migrations
-- `src/database/seeds/01_roles_and_admin.ts` - initial admin seed
+- `src/database/seeds/initial_setup.ts` - roles (si existe tabla `roles`) y usuarios de prueba (RF-05)
+- `src/database/seeds/product_seeds.ts` - productos de ejemplo (RF-03)
 
 ## Environment Variables
 
@@ -111,7 +112,21 @@ Rollback last migration batch:
 npm run migrate:rollback
 ```
 
-> Seed file available at `src/database/seeds/01_roles_and_admin.ts` creates initial `SuperAdmin` user.
+### Seeds y reset de base de datos
+
+Ejecutar solo los seeds (idempotentes; requiere migraciones aplicadas y PostgreSQL accesible con las variables de `DB_*` del `.env`):
+
+```bash
+npm run db:seed
+```
+
+**Reset completo** (rollback de migraciones, volver a aplicar el último estado y cargar seeds). Útil como “botón de pánico” en desarrollo; **no** usar en producción con datos reales:
+
+```bash
+npm run db:reset
+```
+
+El script `db:seed` usa `npx knex seed:run --knexfile knexfile.ts --esm`. Si `migrate:rollback` / `migrate:latest` del `db:reset` no encuentran el knexfile en tu entorno, puedes sustituirlos por `npm run migrate:rollback` y `npm run migrate:latest`, que ya incluyen `--knexfile knexfile.ts --esm`.
 
 ## Docker
 
@@ -129,3 +144,26 @@ Start containers:
 ```bash
 npm run docker:up
 ```
+
+### Migraciones y seeds con Docker
+
+La imagen de producción del **API** solo arranca `node dist/index.js`: **no** ejecuta Knex ni seeds al iniciar (la imagen no incluye `knexfile.ts` ni el árbol `src/` necesario para el CLI con TypeScript).
+
+Flujo recomendado:
+
+1. Levanta la base con Compose (`db` expone `5432` en el host).
+2. En el **host** (con el mismo repo y `npm install`), configura `.env` con `DB_HOST=127.0.0.1` y el resto de credenciales alineadas con `docker-compose.yml` (usuario, contraseña, base `secure_fortress`).
+3. Aplica esquema y datos:
+
+```bash
+npm run migrate:latest
+npm run db:seed
+```
+
+O, en desarrollo, un solo comando:
+
+```bash
+npm run db:reset
+```
+
+Así `db:seed` queda integrado en el flujo operativo (local / CI contra Postgres), sin acoplar seeds al arranque del contenedor API, que permanece delgado y orientado solo a servir HTTP.
