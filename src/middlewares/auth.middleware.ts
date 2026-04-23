@@ -1,6 +1,7 @@
 import { type NextFunction, type Request, type Response } from "express";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 
+import { getJwtSecret } from "../config/security";
 import { logEvent } from "../services/audit.service";
 import { type UserRole } from "../services/auth.service";
 
@@ -39,17 +40,26 @@ export const authenticate = async (
   try {
     const token = getCookieValue(req.headers.cookie, "auth_token");
     if (!token) {
+      await logEvent({
+        event_type: "ACCESS_DENIED",
+        user_id: null,
+        details: "Authentication cookie not provided",
+        req,
+      });
       res.status(401).json({ error: "Authentication token not provided" });
       return;
     }
 
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) {
-      throw new Error("Missing required environment variable: JWT_SECRET");
-    }
+    const jwtSecret = getJwtSecret();
 
     const decoded = jwt.verify(token, jwtSecret);
     if (typeof decoded === "string" || !decoded.role || !decoded.sub) {
+      await logEvent({
+        event_type: "ACCESS_DENIED",
+        user_id: null,
+        details: "Invalid authentication payload",
+        req,
+      });
       res.status(401).json({ error: "Invalid authentication payload" });
       return;
     }
@@ -61,12 +71,18 @@ export const authenticate = async (
     };
     req.user = normalizedPayload;
     next();
-  } catch (error) {
+  } catch {
+    await logEvent({
+      event_type: "ACCESS_DENIED",
+      user_id: null,
+      details: "Invalid or expired authentication token",
+      req,
+    });
     res.status(401).json({ error: "Invalid or expired authentication token" });
   }
 };
 
-export const checkRole = (roles: UserRole[]) => {
+export const authorizeRole = (roles: UserRole[]) => {
   return async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     const user = req.user;
     if (!user || !roles.includes(user.role)) {
@@ -84,6 +100,9 @@ export const checkRole = (roles: UserRole[]) => {
     next();
   };
 };
+
+export const checkRole = authorizeRole;
+export const authMiddleware = authenticate;
 
 export const getCookieValueByName = getCookieValue;
 

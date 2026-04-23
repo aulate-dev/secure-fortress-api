@@ -5,6 +5,7 @@ import { database } from "../config/database";
 interface AuditEventInput {
   event_type: string;
   user_id: number | null;
+  target_id?: number | null;
   details: string;
   req: Request;
 }
@@ -22,12 +23,14 @@ export const getRequestIp = (req: Request): string => {
 export const logEvent = async ({
   event_type,
   user_id,
+  target_id,
   details,
   req,
 }: AuditEventInput): Promise<void> => {
   await database("audit_logs").insert({
     event_type,
     user_id,
+    target_id: target_id ?? null,
     details,
     ip_address: getRequestIp(req),
     route: req.originalUrl,

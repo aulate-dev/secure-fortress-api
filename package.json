@@ -11,6 +11,8 @@
     "migrate:make": "knex --knexfile knexfile.ts --esm migrate:make",
     "migrate:latest": "knex --knexfile knexfile.ts --esm migrate:latest",
     "migrate:rollback": "knex --knexfile knexfile.ts --esm migrate:rollback",
+    "db:seed": "npx knex seed:run --knexfile knexfile.ts --esm",
+    "db:reset": "npx knex migrate:rollback && npx knex migrate:latest && npm run db:seed",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -33,7 +35,8 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "knex": "^3.2.9",
-    "pg": "^8.20.0"
+    "pg": "^8.20.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
@@ -43,6 +46,7 @@
     "@types/node": "^25.6.0",
     "@types/pg": "^8.20.0",
     "ts-node-dev": "^2.0.0",
+    "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }
 }

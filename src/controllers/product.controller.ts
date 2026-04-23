@@ -2,8 +2,8 @@ import { type Response } from "express";
 
 import { database } from "../config/database";
 import { type AuthenticatedRequest } from "../middlewares/auth.middleware";
+import { type UserRole } from "../services/auth.service";
 import { logEvent } from "../services/audit.service";
-import { requireNonEmptyString, requirePositiveNumber } from "../utils/validation.util";
 
 interface ProductRecord {
   id: number;
@@ -14,19 +14,96 @@ interface ProductRecord {
   precio: number;
 }
 
-const parseProductPayload = (payload: unknown): Omit<ProductRecord, "id"> => {
-  const body = payload as Record<string, unknown>;
-  const sku = requireNonEmptyString(body.sku_alfanumerico, "sku_alfanumerico");
-  const nombre = requireNonEmptyString(body.nombre, "nombre");
-  const descripcion = requireNonEmptyString(body.descripcion, "descripcion");
-  const cantidad = requirePositiveNumber(body.cantidad, "cantidad");
-  const precio = requirePositiveNumber(body.precio, "precio");
+const BASIC_TEXT_PATTERN = /^[\p{L}\p{N}\s.,;:!?'"()\-]+$/u;
+const ALPHANUMERIC_CODE_PATTERN = /^[A-Za-z0-9]+$/;
 
-  if (!/^[a-zA-Z0-9_-]+$/.test(sku)) {
-    throw new Error("sku_alfanumerico must be alphanumeric");
+const normalizeStringField = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
   }
 
-  return { sku_alfanumerico: sku, nombre, descripcion, cantidad, precio };
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const parseNonNegativeNumber = (value: unknown): number | null => {
+  const numericValue = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numericValue) || numericValue < 0) {
+    return null;
+  }
+
+  return numericValue;
+};
+
+const buildProductPatchByRole = (
+  payload: Record<string, unknown>,
+  role: UserRole,
+): Partial<Omit<ProductRecord, "id">> | "forbidden" | null => {
+  if (role === "Auditor") {
+    return "forbidden";
+  }
+
+  const requestedCode = payload.codigo ?? payload.sku_alfanumerico;
+  const requestedNombre = payload.nombre;
+  const requestedDescripcion = payload.descripcion;
+  const requestedCantidad = payload.cantidad;
+  const requestedPrecio = payload.precio;
+
+  if (
+    role === "Registrador" &&
+    (requestedPrecio !== undefined || requestedNombre !== undefined || requestedCode !== undefined)
+  ) {
+    return "forbidden";
+  }
+
+  const patch: Partial<Omit<ProductRecord, "id">> = {};
+
+  if (requestedCode !== undefined && role === "SuperAdmin") {
+    const code = normalizeStringField(requestedCode);
+    if (!code || !ALPHANUMERIC_CODE_PATTERN.test(code)) {
+      return null;
+    }
+
+    patch.sku_alfanumerico = code;
+  }
+
+  if (requestedNombre !== undefined && role === "SuperAdmin") {
+    const nombre = normalizeStringField(requestedNombre);
+    if (!nombre || !BASIC_TEXT_PATTERN.test(nombre)) {
+      return null;
+    }
+
+    patch.nombre = nombre;
+  }
+
+  if (requestedDescripcion !== undefined) {
+    const descripcion = normalizeStringField(requestedDescripcion);
+    if (!descripcion || !BASIC_TEXT_PATTERN.test(descripcion)) {
+      return null;
+    }
+
+    patch.descripcion = descripcion;
+  }
+
+  if (requestedCantidad !== undefined) {
+    const cantidad = parseNonNegativeNumber(requestedCantidad);
+    if (cantidad === null) {
+      return null;
+    }
+
+    patch.cantidad = cantidad;
+  }
+
+  if (requestedPrecio !== undefined && role === "SuperAdmin") {
+    const precio = parseNonNegativeNumber(requestedPrecio);
+    if (precio === null) {
+      return null;
+    }
+
+    patch.precio = precio;
+  }
+
+  return Object.keys(patch).length > 0 ? patch : null;
 };
 
 export const listProducts = async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -52,7 +129,12 @@ export const getProductById = async (req: AuthenticatedRequest, res: Response): 
 
 export const createProduct = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const productPayload = parseProductPayload(req.body);
+    if (req.user?.role === "Registrador") {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const productPayload = req.body as Omit<ProductRecord, "id">;
     const [createdProduct] = await database<ProductRecord>("products")
       .insert(productPayload)
       .returning("*");
@@ -79,11 +161,113 @@ export const updateProduct = async (req: AuthenticatedRequest, res: Response): P
       return;
     }
 
-    const productPayload = parseProductPayload(req.body);
-    const [updatedProduct] = await database<ProductRecord>("products")
+    const userRole = req.user?.role;
+    if (!userRole) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+
+    const currentProduct = await database<ProductRecord>("products").where({ id: productId }).first();
+    if (!currentProduct) {
+      res.status(404).json({ error: "Product not found" });
+      return;
+    }
+
+    const body = req.body as Record<string, unknown>;
+    const normalizedBody: Record<string, unknown> = { ...body };
+    if (userRole === "Registrador") {
+      if (body.cantidad === undefined) {
+        res.status(403).json({
+          error: "El registrador solo puede registrar salidas mediante el campo cantidad",
+        });
+        return;
+      }
+
+      const requestedCantidad = parseNonNegativeNumber(body.cantidad);
+      if (requestedCantidad === null) {
+        res.status(400).json({ error: "Invalid product payload" });
+        return;
+      }
+
+      if (requestedCantidad > currentProduct.cantidad) {
+        res.status(403).json({
+          error: "El registrador no tiene permisos para aumentar el stock, solo para reportar salidas",
+        });
+        return;
+      }
+
+      if (body.precio !== undefined) {
+        const requestedPrecio = parseNonNegativeNumber(body.precio);
+        if (requestedPrecio === null) {
+          res.status(400).json({ error: "Invalid product payload" });
+          return;
+        }
+
+        if (requestedPrecio !== currentProduct.precio) {
+          res.status(403).json({
+            error: "El registrador no puede modificar el precio o datos maestros del producto",
+          });
+          return;
+        }
+
+        delete normalizedBody.precio;
+      }
+
+      const sameAsCurrentNombre =
+        body.nombre !== undefined &&
+        normalizeStringField(body.nombre) !== null &&
+        normalizeStringField(body.nombre) === currentProduct.nombre;
+      const requestedCode = body.codigo ?? body.sku_alfanumerico;
+      const sameAsCurrentCode =
+        requestedCode !== undefined &&
+        normalizeStringField(requestedCode) !== null &&
+        normalizeStringField(requestedCode) === currentProduct.sku_alfanumerico;
+      const sameAsCurrentDescripcion =
+        body.descripcion !== undefined &&
+        normalizeStringField(body.descripcion) !== null &&
+        normalizeStringField(body.descripcion) === currentProduct.descripcion;
+
+      const attemptedMasterDataChange =
+        (body.nombre !== undefined && !sameAsCurrentNombre) ||
+        (requestedCode !== undefined && !sameAsCurrentCode) ||
+        (body.descripcion !== undefined && !sameAsCurrentDescripcion);
+
+      if (attemptedMasterDataChange) {
+        res.status(403).json({
+          error: "El registrador no puede modificar el precio o datos maestros del producto",
+        });
+        return;
+      }
+
+      if (body.nombre !== undefined) {
+        delete normalizedBody.nombre;
+      }
+      if (body.codigo !== undefined) {
+        delete normalizedBody.codigo;
+      }
+      if (body.sku_alfanumerico !== undefined) {
+        delete normalizedBody.sku_alfanumerico;
+      }
+      if (body.descripcion !== undefined) {
+        delete normalizedBody.descripcion;
+      }
+    }
+
+    const productPayload = buildProductPatchByRole(normalizedBody, userRole);
+    if (productPayload === "forbidden") {
+      res.status(403).json({ error: "El rol actual no tiene permisos para modificar productos" });
+      return;
+    }
+
+    if (!productPayload) {
+      res.status(400).json({ error: "Invalid product payload" });
+      return;
+    }
+
+    const [updatedProduct] = await database("products")
       .where({ id: productId })
-      .update(productPayload)
-      .returning("*");
+      .update({ ...productPayload, updated_at: new Date() })
+      .returning<ProductRecord[]>("*");
 
     if (!updatedProduct) {
       res.status(404).json({ error: "Product not found" });

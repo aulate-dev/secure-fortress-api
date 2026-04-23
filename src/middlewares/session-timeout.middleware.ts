@@ -2,6 +2,7 @@ import { type NextFunction, type Response } from "express";
 
 import { type AuthenticatedRequest } from "./auth.middleware";
 import { invalidateSession, touchSession } from "../services/session.service";
+import { clearAuthCookie } from "../utils/auth-cookie.util";
 
 export const enforceSessionTimeout = (
   req: AuthenticatedRequest,
@@ -21,5 +22,6 @@ export const enforceSessionTimeout = (
   }
 
   invalidateSession(userId);
+  clearAuthCookie(res);
   res.status(401).json({ error: "Session expired due to inactivity" });
 };

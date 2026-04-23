@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import jwt from "jsonwebtoken";
 
 import { database } from "../config/database";
+import { getJwtSecret } from "../config/security";
 import { comparePassword, hashPassword } from "../utils/hash.util";
 import { getRequestIp, logEvent } from "./audit.service";
 
@@ -39,6 +40,7 @@ interface LoginResult {
     username: string;
     email: string;
     role: UserRole;
+    last_ip: string | null;
   };
 }
 
@@ -102,17 +104,14 @@ export class AuthService {
     if (!isPasswordValid) {
       await logEvent({
         event_type: "LOGIN_FAILED",
-        user_id: user.id,
+        user_id: null,
         details: "Invalid password",
         req,
       });
       throw buildInvalidCredentialsError();
     }
 
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) {
-      throw new Error("Missing required environment variable: JWT_SECRET");
-    }
+    const jwtSecret = getJwtSecret();
 
     const sessionId = randomUUID();
     const currentIp = getRequestIp(req);
@@ -132,7 +131,7 @@ export class AuthService {
         sid: sessionId,
       },
       jwtSecret,
-      { expiresIn: "2h" },
+      { expiresIn: "1h" },
     );
 
     await logEvent({
@@ -150,6 +149,7 @@ export class AuthService {
         username: user.username,
         email: user.email,
         role: user.role,
+        last_ip: currentIp,
       },
     };
   }
