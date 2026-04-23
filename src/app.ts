@@ -9,9 +9,22 @@ import { authRouter } from "./routes/auth.routes";
 import { productRouter } from "./routes/product.routes";
 
 const app = express();
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",").map((origin) => origin.trim()) ?? [];
 
 app.use(helmet());
-app.use(cors());
+app.use(
+  cors({
+    credentials: true,
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("CORS origin not allowed"));
+    },
+  }),
+);
 app.use(express.json());
 app.use(validateCsrfSource);
 
